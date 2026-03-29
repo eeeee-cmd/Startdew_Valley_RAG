@@ -1,41 +1,45 @@
-﻿# Stardew Valley RAG Project
+﻿# Stardew Valley RAG
 
-This repository provides a clean Python project framework for a team-based Retrieval-Augmented Generation (RAG) conversational agent focused on the public Stardew Valley Wiki.
+This repository is a team project scaffold for a Retrieval-Augmented Generation (RAG) chatbot focused on the Stardew Valley Wiki.
 
-At the current stage, only the data extraction layer is intended as the first concrete milestone, while the remaining modules are organized so teammates can extend them without restructuring the codebase.
+The current repository is intentionally lightweight. It provides the project structure, module layout, data folders, and a raw wiki dataset snapshot so the team can build the rest of the pipeline in a consistent way.
 
-## Project Overview
+## Project Purpose
 
-The long-term system is intended to support:
+The long-term goal of this project is to build a conversational RAG system that can answer Stardew Valley questions using grounded information from the public Stardew Valley Wiki.
 
-- Wiki data extraction and reproducible storage
-- Text preprocessing and normalization
-- Chunking for retrieval
-- Embedding generation
-- Vector storage
-- Retrieval orchestration
-- Conversational agent logic
-- A simple frontend
+Planned system stages:
 
-## Current Status
+- data extraction from the Stardew Valley Wiki
+- preprocessing and normalization
+- chunking for retrieval
+- embeddings generation
+- vector database storage
+- retrieval pipeline
+- agent orchestration
+- frontend or user interface
 
-Implemented data artifact:
+## Current Repository Status
 
-- Raw Stardew Valley Wiki extraction output stored in `data/raw/`
+What is currently included:
 
-Project scaffold only:
+- project folder structure for all planned modules
+- placeholder files for future implementation
+- raw extracted wiki data in `data/raw/`
+- a root `README.md` describing the scaffold
 
-- `src/extraction/`
-- `src/preprocessing/`
-- `src/chunking/`
-- `src/embeddings/`
-- `src/vectorstore/`
-- `src/retrieval/`
-- `src/agent/`
-- `src/frontend/`
-- `tests/`
+What is not currently included:
 
-## Folder Structure
+- finalized extraction code
+- preprocessing logic
+- chunking logic
+- embeddings code
+- vector database integration
+- retrieval implementation
+- agent implementation
+- frontend implementation
+
+## Repository Structure
 
 ```text
 Stardew_valley_RAG/
@@ -64,27 +68,69 @@ Stardew_valley_RAG/
 └── tests/
 ```
 
-## Setup Instructions
+## Folder Guide
 
-1. Create and activate a virtual environment.
-2. Install dependencies:
+- `data/raw/`: source data snapshots collected from the wiki
+- `data/interim/`: temporary or cleaned outputs created during preprocessing
+- `data/processed/`: downstream outputs prepared for retrieval or modeling
+- `src/extraction/`: future wiki extraction logic
+- `src/preprocessing/`: future text cleaning and normalization logic
+- `src/chunking/`: future chunk creation logic
+- `src/embeddings/`: future embedding generation logic
+- `src/vectorstore/`: future vector database integration
+- `src/retrieval/`: future retrieval pipeline logic
+- `src/agent/`: future RAG orchestration and conversation logic
+- `src/frontend/`: future user interface code
+- `src/utils/`: shared helpers used across modules
+- `tests/`: unit tests and integration tests
+- `docs/`: project documentation
+- `notebooks/`: experiments and exploration work
+
+## Data Notes
+
+The repository currently contains raw Stardew Valley Wiki extraction data under `data/raw/`.
+
+Recommended data workflow:
+
+1. keep `data/raw/` as the original source snapshot
+2. write cleaned or transformed outputs into `data/interim/`
+3. write retrieval-ready artifacts into `data/processed/`
+
+## Suggested Team Workflow
+
+- keep each module focused on one responsibility
+- avoid mixing extraction, preprocessing, retrieval, and agent logic in the same file
+- use `src/` as the main implementation area
+- use `tests/` for validation as code is added
+- document major design decisions in `docs/`
+
+## Setup
+
+Basic environment setup:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Copy environment defaults if needed:
+Optional environment file setup:
 
 ```bash
 copy .env.example .env
 ```
 
-## Data Notes
+## Next Steps
 
-The repository currently includes raw extracted Stardew Valley Wiki data in `data/raw/`. The `data/interim/` and `data/processed/` folders are reserved for future preprocessing and downstream pipeline outputs.
+Recommended implementation order:
 
-## Teammate Handoff Notes
+1. finalize extraction module
+2. add preprocessing and cleaning pipeline
+3. implement chunking strategy
+4. add embeddings and vector storage
+5. implement retrieval and answer generation
+6. connect the system to a simple frontend
 
-- Keep extraction, preprocessing, chunking, embedding, retrieval, and agent logic separated by module.
-- Avoid changing the project structure unless the team agrees on a repo-wide refactor.
-- Treat `data/raw/` as the source-of-truth snapshot before future cleaning or chunking steps are added.
+## Notes For Teammates
+
+This repository is meant to be extended gradually. The current state should be treated as a clean starting point rather than a finished pipeline.
+
+If the team adds working code later, update this README so it stays aligned with the actual state of the repository.
