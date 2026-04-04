@@ -1,48 +1,27 @@
 ﻿# Stardew Valley RAG
 
-This repository is a team project scaffold for a Retrieval-Augmented Generation (RAG) chatbot focused on the Stardew Valley Wiki.
-
-The current repository is intentionally lightweight. It provides the project structure, module layout, data folders, and a raw wiki dataset snapshot so the team can build the rest of the pipeline in a consistent way.
+A Retrieval-Augmented Generation (RAG) chatbot that answers Stardew Valley questions using grounded information from the public Stardew Valley Wiki.
 
 ## Project Purpose
 
-The long-term goal of this project is to build a conversational RAG system that can answer Stardew Valley questions using grounded information from the public Stardew Valley Wiki.
+Build a conversational RAG system grounded in the Stardew Valley Wiki, capable of answering player questions about farming, quests, villagers, fishing, mining, and more.
 
-Planned system stages:
-
-- data extraction from the Stardew Valley Wiki
-- preprocessing and normalization
-- chunking for retrieval
-- embeddings generation
-- vector database storage
-- retrieval pipeline
-- agent orchestration
-- frontend or user interface
-
-## Current Repository Status
-
-What is currently included:
-
-- project folder structure for all planned modules
-- placeholder files for future implementation
-- raw extracted wiki data in `data/raw/`
-- a root `README.md` describing the scaffold
-
-What is not currently included:
-
-- finalized extraction code
-- preprocessing logic
-- chunking logic
-- embeddings code
-- vector database integration
-- retrieval implementation
-- agent implementation
-- frontend implementation
+## System Architecture
+```
+processed.jsonl → chunker.py → build_index.py → FAISS index
+                                                      │
+                                              retriever.py
+                                                      │
+                                     query → app.py (/chat)
+                                                      │
+                                              llm.py (Qwen3)
+                                                      │
+                                          answer + sources
+```
 
 ## Repository Structure
-
 ```text
-Stardew_valley_RAG/
+Stardew_Valley_RAG/
 ├── .env.example
 ├── .gitignore
 ├── README.md
@@ -50,87 +29,104 @@ Stardew_valley_RAG/
 ├── main.py
 ├── requirements.txt
 ├── data/
-│   ├── raw/
-│   ├── interim/
+│   ├── raw/                        # raw scraped wiki sections
+│   ├── interim/                    # page-level aggregations
 │   └── processed/
+│       └── stardew_wiki_sections.jsonl   # canonical RAG input (8,674 clean chunks)
+├── src2/                           # RAG pipeline (main implementation)
+│   ├── app.py                      # FastAPI — /chat and /retrieve endpoints
+│   ├── chunker.py                  # load JSONL → LangChain Documents
+│   ├── embeddings.py               # LocalEmbedder + LocalEmbeddingsWrapper
+│   ├── build_index.py              # embed chunks → save FAISS index (run once)
+│   ├── retriever.py                # semantic search over FAISS index
+│   ├── llm.py                      # Qwen3 client with reasoning support
+│   ├── inspect_data.py             # data inspection helper (local use only)
+│   ├── test_llm.py                 # LLM endpoint test (local use only)
+│   └── index/                      # FAISS index (not committed — rebuild locally)
 ├── docs/
 ├── notebooks/
-├── src/
-│   ├── extraction/
-│   ├── preprocessing/
-│   ├── chunking/
-│   ├── embeddings/
-│   ├── vectorstore/
-│   ├── retrieval/
-│   ├── agent/
-│   ├── frontend/
-│   └── utils/
+├── src/                            # original scaffold (unused)
 └── tests/
 ```
 
-## Folder Guide
+## Data
 
-- `data/raw/`: source data snapshots collected from the wiki
-- `data/interim/`: temporary or cleaned outputs created during preprocessing
-- `data/processed/`: downstream outputs prepared for retrieval or modeling
-- `src/extraction/`: future wiki extraction logic
-- `src/preprocessing/`: future text cleaning and normalization logic
-- `src/chunking/`: future chunk creation logic
-- `src/embeddings/`: future embedding generation logic
-- `src/vectorstore/`: future vector database integration
-- `src/retrieval/`: future retrieval pipeline logic
-- `src/agent/`: future RAG orchestration and conversation logic
-- `src/frontend/`: future user interface code
-- `src/utils/`: shared helpers used across modules
-- `tests/`: unit tests and integration tests
-- `docs/`: project documentation
-- `notebooks/`: experiments and exploration work
+| File | Granularity | Records | Use |
+|------|-------------|---------|-----|
+| `raw/` | Section-level | 11,748 | Original scrape |
+| `interim/` | Page-level | — | Intermediate aggregation |
+| `processed/stardew_wiki_sections.jsonl` | Section-level | 8,674 (filtered) | ✅ RAG input |
 
-## Data Notes
-
-The repository currently contains raw Stardew Valley Wiki extraction data under `data/raw/`.
-
-Recommended data workflow:
-
-1. keep `data/raw/` as the original source snapshot
-2. write cleaned or transformed outputs into `data/interim/`
-3. write retrieval-ready artifacts into `data/processed/`
-
-## Suggested Team Workflow
-
-- keep each module focused on one responsibility
-- avoid mixing extraction, preprocessing, retrieval, and agent logic in the same file
-- use `src/` as the main implementation area
-- use `tests/` for validation as code is added
-- document major design decisions in `docs/`
+Filters applied to processed data:
+- Removed chunks under 50 characters
+- Removed `Modding:` and `Module:` wiki pages
+- Removed binary/corrupted records
 
 ## Setup
-
-Basic environment setup:
-
 ```bash
-pip install -r requirements.txt
+# 1 — clone and activate virtualenv
+python -m venv .venv
+source .venv/bin/activate
+
+# 2 — install dependencies
+cd src2
+pip install -r ../requirements.txt
+
+# 3 — configure environment
+cp ../.env.example ../.env
+# edit .env and set:
+# LLM_BASE_URL=https://rsm-8430-finalproject.bjlkeng.io/v1
+# LLM_API_KEY=your-student-id
+# LLM_MODEL=qwen3-30b-a3b-fp8
+
+# 4 — build the FAISS index (once, ~25 seconds)
+python build_index.py --input ../data/processed/stardew_wiki_sections.jsonl --strategy section_recursive
+
+# 5 — start the API
+uvicorn app:app --reload --port 8000
 ```
 
-Optional environment file setup:
+## API Endpoints
 
+### `POST /chat` — Full RAG
 ```bash
-copy .env.example .env
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"query": "How do I upgrade my watering can?"}'
 ```
 
-## Next Steps
+Response includes `answer`, `sources` (page title, heading, URL, score), and `usage`.
 
-Recommended implementation order:
+### `POST /retrieve` — Retrieval only (no LLM)
+```bash
+curl -X POST http://localhost:8000/retrieve \
+  -H "Content-Type: application/json" \
+  -d '{"query": "fishing rod", "top_k": 3}'
+```
 
-1. finalize extraction module
-2. add preprocessing and cleaning pipeline
-3. implement chunking strategy
-4. add embeddings and vector storage
-5. implement retrieval and answer generation
-6. connect the system to a simple frontend
+### `GET /health` — Health check
+```bash
+curl http://localhost:8000/health
+```
 
-## Notes For Teammates
+## Chunking Strategy
 
-This repository is meant to be extended gradually. The current state should be treated as a clean starting point rather than a finished pipeline.
+Default: `section_recursive` — `RecursiveCharacterTextSplitter` with `chunk_size=512`, `chunk_overlap=64`.
 
-If the team adds working code later, update this README so it stays aligned with the actual state of the repository.
+Each chunk's `page_content` prepends the page title and heading before embedding:
+```
+'Watering Cans — Upgrades and Water Consumption\n<text>'
+```
+The original text is stored separately in metadata for clean citation display.
+
+## LLM
+
+Model: `qwen3-30b-a3b-fp8` with reasoning enabled via the course-provided endpoint.
+Client uses the OpenAI-compatible API (`openai` Python package).
+Chain-of-thought reasoning is enabled by default — set `include_reasoning: true` in `/chat` to expose it in the response.
+
+## Notes
+
+- The `index/` folder is not committed — rebuild it with `build_index.py`
+- The `.env` file is not committed — copy from `.env.example` and fill in your student ID
+- `inspect_data.py` and `test_llm.py` are local helper scripts, not part of the pipeline
