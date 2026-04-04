@@ -1,1 +1,23 @@
-﻿
+﻿# LangChain ecosystem (matches lab)
+numpy<2
+langchain
+langchain-community
+langchain-text-splitters
+langchain-core
+
+# Embeddings & vector store (matches lab)
+sentence-transformers
+faiss-cpu
+tiktoken
+
+# LLM client — OpenAI-compatible (lab pattern: OpenAI(base_url=..., api_key=...))
+openai>=1.30.0
+
+# API server
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.0.0
+
+# Utilities
+python-dotenv
+tqdm
