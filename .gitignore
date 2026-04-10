@@ -1,1 +1,13 @@
 ﻿.env
+# Large binary files
+*.faiss
+*.pkl
+__pycache__/
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+
+# Index directories
+index/
