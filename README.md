@@ -6,47 +6,89 @@ A Retrieval-Augmented Generation (RAG) chatbot that answers Stardew Valley quest
 
 Build a conversational RAG system grounded in the Stardew Valley Wiki, capable of answering player questions about farming, quests, villagers, fishing, mining, and more.
 
-## System Architecture
+## RAG System Overview
+
+**End-to-End Pipeline:**
 ```
-processed.jsonl → chunker.py → build_index.py → FAISS index
-                                                      │
-                                              retriever.py
-                                                      │
-                                     query → app.py (/chat)
-                                                      │
-                                              llm.py (Qwen3)
-                                                      │
-                                          answer + sources
+Wiki Data (JSONL)
+    │
+    ├─→ chunker.py
+    │   ├─ Load JSONL documents
+    │   └─ Split into 512-char sections with 64-char overlap
+    │
+    ├─→ build_index.py
+    │   ├─ embeddings.py → A2 endpoint (BAAI/bge-base-en-v1.5)
+    │   │   ├─ Embed all 8,674 chunks
+    │   │   └─ Save vectors to FAISS
+    │   │
+    │   └─ Save FAISS index to disk (index/section_recursive/)
+    │
+    └─→ Runtime Pipeline:
+        │
+        User Query
+            │
+            ├─→ orchestrator.py (LLM intent routing)
+            │   ├─ Classify: CROPS | ITEMS | FRIENDSHIP | UNKNOWN | OFF_TOPIC
+            │   └─ Route to appropriate agent
+            │
+            ├─→ Agent Selection
+            │   ├─ CropPlanner
+            │   ├─ ItemFinder
+            │   ├─ FriendshipFinder
+            │   └─ DefaultAgent
+            │
+            ├─→ retriever.py (FAISS semantic search)
+            │   ├─ Embed query using same embeddings
+            │   └─ Find top-k similar chunks from index
+            │
+            ├─→ llm.py (Qwen3-30B generation)
+            │   ├─ Augment query with retrieved context
+            │   └─ Generate grounded answer
+            │
+            └─→ app.py (FastAPI)
+                └─ Return: answer + sources + intent + confidence
 ```
 
+**Key Technologies:**
+- **Embeddings**: BAAI/bge-base-en-v1.5 (A2 endpoint)
+- **Vector Store**: FAISS (8,674 chunks)
+- **LLM**: Qwen3-30B (final project endpoint)
+- **Framework**: FastAPI + LangChain
+- **Intent Routing**: LLM-based classification
+
 ## Repository Structure
+
 ```text
 Stardew_Valley_RAG/
-├── .env.example
-├── .gitignore
-├── README.md
-├── config.py
-├── main.py
-├── requirements.txt
+├── README.md                       # Project overview (this file)
+├── SETUP.md                        # Installation & running instructions
+├── ARCHITECTURE.png                # Visual system diagram
+├── .env                            # Configuration (not committed)
+├── requirements.txt                # Python dependencies
+│
 ├── data/
-│   ├── raw/                        # raw scraped wiki sections
-│   ├── interim/                    # page-level aggregations
+│   ├── raw/                        # Raw scraped wiki sections
+│   ├── interim/                    # Page-level aggregations
 │   └── processed/
-│       └── stardew_wiki_sections.jsonl   # canonical RAG input (8,674 clean chunks)
-├── src2/                           # RAG pipeline (main implementation)
-│   ├── app.py                      # FastAPI — /chat and /retrieve endpoints
-│   ├── chunker.py                  # load JSONL → LangChain Documents
-│   ├── embeddings.py               # LocalEmbedder + LocalEmbeddingsWrapper
-│   ├── build_index.py              # embed chunks → save FAISS index (run once)
-│   ├── retriever.py                # semantic search over FAISS index
-│   ├── llm.py                      # Qwen3 client with reasoning support
-│   ├── inspect_data.py             # data inspection helper (local use only)
-│   ├── test_llm.py                 # LLM endpoint test (local use only)
-│   └── index/                      # FAISS index (not committed — rebuild locally)
-├── docs/
-├── notebooks/
-├── src/                            # original scaffold (unused)
-└── tests/
+│       └── stardew_wiki_sections.jsonl   # 8,674 clean wiki chunks (RAG input)
+│
+├── src2/                           # Main RAG implementation
+│   ├── app.py                      # FastAPI server + web UI
+│   ├── orchestrator.py             # LLM-based intent routing
+│   ├── agents.py                   # 4 domain-specific agents
+│   ├── retriever.py                # FAISS vector search
+│   ├── llm.py                      # Qwen3 LLM client
+│   ├── embeddings.py               # Embedding service (A2 endpoint)
+│   ├── chunker.py                  # Document chunking
+│   ├── build_index.py              # Build FAISS index
+│   ├── index.html                  # Stardew Valley themed UI
+│   ├── index/                      # FAISS index (generated, not committed)
+│   └── tests/                      # 200+ unit & integration tests
+│
+├── src/                            # Original scaffold (legacy)
+├── docs/                           # Documentation
+├── notebooks/                      # Exploration notebooks
+└── tests/                          # Top-level tests
 ```
 
 ## Data
@@ -62,52 +104,50 @@ Filters applied to processed data:
 - Removed `Modding:` and `Module:` wiki pages
 - Removed binary/corrupted records
 
-## Setup
-```bash
-# 1 — clone and activate virtualenv
-python -m venv .venv
-source .venv/bin/activate
+## Chatbot Architecture
 
-# 2 — install dependencies
-cd src2
-pip install -r ../requirements.txt
+See [ARCHITECTURE.png](ARCHITECTURE.png) for visual system diagram.
 
-# 3 — configure environment
-cp ../.env.example ../.env
-# edit .env and set:
-# LLM_BASE_URL=https://rsm-8430-finalproject.bjlkeng.io/v1
-# LLM_API_KEY=your-student-id
-# LLM_MODEL=qwen3-30b-a3b-fp8
+The system uses a **multi-agent architecture** where queries are routed to specialized agents based on intent classification:
 
-# 4 — build the FAISS index (once, ~25 seconds)
-python build_index.py --input ../data/processed/stardew_wiki_sections.jsonl --strategy section_recursive
+### Key Components
 
-# 5 — start the API
-uvicorn app:app --reload --port 8000
-```
+**1. Orchestrator** (`src2/orchestrator.py`)
+- LLM-based intent classification
+- Returns: Intent type, confidence score, probabilities for all 5 categories
+- Handles ambiguous queries transparently
 
-## API Endpoints
+**2. Agents** (`src2/agents.py`)
+- **CropPlanner**: Farming, crops, seasons, profitability
+- **ItemFinder**: Items, tools, resources, crafting
+- **FriendshipFinder**: Villagers, romance, gifts, marriage
+- **DefaultAgent**: General Stardew Valley knowledge
+- Each retrieves wiki chunks → Augments with context → Generates answer
 
-### `POST /chat` — Full RAG
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"query": "How do I upgrade my watering can?"}'
-```
+**3. Retriever** (`src2/retriever.py`)
+- FAISS vector store with 8,674 wiki chunks
+- Semantic search using sentence-transformers embeddings
+- Returns most similar chunks with relevance scores
 
-Response includes `answer`, `sources` (page title, heading, URL, score), and `usage`.
+**4. LLM Client** (`src2/llm.py`)
+- OpenAI-compatible wrapper for Qwen3-30B
+- Handles retries, timeouts, errors
+- Configurable temperature
 
-### `POST /retrieve` — Retrieval only (no LLM)
-```bash
-curl -X POST http://localhost:8000/retrieve \
-  -H "Content-Type: application/json" \
-  -d '{"query": "fishing rod", "top_k": 3}'
-```
+**5. FastAPI Server** (`src2/app.py`)
+- `/` — Web chat UI
+- `/chat` — Multi-agent RAG endpoint
+- `/health` — System status
 
-### `GET /health` — Health check
-```bash
-curl http://localhost:8000/health
-```
+### Intent Categories
+
+| Intent | Agent | Example |
+|--------|-------|---------|
+| CROPS | CropPlanner | "What crops should I plant in spring?" |
+| ITEMS | ItemFinder | "Where can I find copper ore?" |
+| FRIENDSHIP | FriendshipFinder | "How do I marry Abigail?" |
+| UNKNOWN | DefaultAgent | "Tell me about Stardew Valley" |
+| OFF_TOPIC | Rejected | "What's the weather today?" |
 
 ## Chunking Strategy
 
@@ -123,10 +163,9 @@ The original text is stored separately in metadata for clean citation display.
 
 Model: `qwen3-30b-a3b-fp8` with reasoning enabled via the course-provided endpoint.
 Client uses the OpenAI-compatible API (`openai` Python package).
-Chain-of-thought reasoning is enabled by default — set `include_reasoning: true` in `/chat` to expose it in the response.
 
-## Notes
+## Setup & Installation
 
-- The `index/` folder is not committed — rebuild it with `build_index.py`
-- The `.env` file is not committed — copy from `.env.example` and fill in your student ID
-- `inspect_data.py` and `test_llm.py` are local helper scripts, not part of the pipeline
+**For complete step-by-step installation and running instructions, see [SETUP.md](SETUP.md).**
+
+This includes prerequisites, all 7 installation steps, running tests, troubleshooting, and API reference.
