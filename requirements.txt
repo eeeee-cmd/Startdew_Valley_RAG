@@ -1,12 +1,7 @@
 ﻿# LangChain ecosystem (matches lab)
-numpy<2
 langchain
-langchain-community
-langchain-text-splitters
-langchain-core
 
 # Embeddings & vector store (matches lab)
-sentence-transformers
 faiss-cpu
 tiktoken
 
@@ -20,7 +15,6 @@ pydantic>=2.0.0
 
 # Utilities
 python-dotenv
-tqdm
 
 # Testing & evaluation
 requests
