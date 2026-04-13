@@ -10,7 +10,7 @@ openai>=1.30.0
 
 # API server
 fastapi>=0.115.0
-uvicorn[standard]>=0.30.0
+uvicorn
 pydantic>=2.0.0
 
 # Utilities
